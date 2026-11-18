@@ -4,116 +4,335 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Le Coq se Loge — Studios étudiants par ville et par école</title>
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            coq: { sage: '#B8552E', eucalyptus: '#C9643B', linen: '#FAF7F2', terracotta: '#D97736', honey: '#F0AE54', ink: '#2B211B' }
+          }
+        }
+      }
+    };
+  </script>
   <style>
     body { font-family: 'Inter', sans-serif; background-color: #FAF7F2; color: #2B211B; }
-    #leafletMap { z-index: 10; background-color: #EFE8DE; width: 100%; height: 450px; min-height: 450px; }
-    .coq-price-pin { background: #BF5F22; color: #FFFFFF; font-weight: 800; font-size: 12px; padding: 4px 8px; border-radius: 999px; border: 2px solid #FFFDF9; box-shadow: 0 4px 12px rgba(43, 33, 27, 0.22); white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-    .coq-price-pin:hover { background: #8C3B1C; color: #FFFDF9; border-color: #F4BE6E; transform: scale(1.14); }
+    input[type="range"] { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 999px; background: #EADFD3; outline: none; }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%;
+      background: #C9643B; border: 3px solid #FFFDF9; box-shadow: 0 2px 8px rgba(184, 85, 46, 0.35); cursor: pointer;
+    }
+    #leafletMap { z-index: 10; background-color: #EFE8DE; min-height: 380px; }
+    .leaflet-popup-content-wrapper { border-radius: 1rem !important; padding: 0 !important; overflow: hidden; }
+    .leaflet-popup-content { margin: 0 !important; min-width: 200px; }
+    .coq-price-pin {
+      background: #BF5F22; color: #FFFFFF; font-weight: 800; font-size: 12px;
+      padding: 4px 8px; border-radius: 999px; border: 2px solid #FFFDF9; box-shadow: 0 4px 12px rgba(43, 33, 27, 0.22);
+      white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+    .coq-price-pin:hover, .coq-price-pin.selected { background: #8C3B1C; color: #FFFDF9; border-color: #F4BE6E; transform: scale(1.14); z-index: 999 !important; }
+    @keyframes popIn { from { opacity: 0; transform: translateY(8px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .animate-pop { animation: popIn 0.22s ease-out forwards; }
   </style>
 </head>
-<body class="min-h-screen flex flex-col antialiased">
+<body class="min-h-screen flex flex-col pb-20 md:pb-0 antialiased selection:bg-[#FCECE2] selection:text-[#2B211B]">
 
   <!-- HEADER -->
   <header class="sticky top-0 z-30 bg-[#B8552E] text-[#FFFDF9] border-b border-[#9D4421]">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-      <div class="flex items-center gap-2.5">
-        <div class="w-9 h-9 rounded-xl bg-[#9E4320] flex items-center justify-center font-black text-white text-lg">🐓</div>
-        <span class="text-base sm:text-lg font-black tracking-tight text-[#FFFDF9]">Le Coq <span class="text-[#FDE0B2]">se Loge</span></span>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-14 gap-3">
+        <a href="#" onclick="resetAllFilters(); return false;" class="flex items-center gap-2.5 group focus:outline-none shrink-0">
+          <div class="w-9 h-9 rounded-xl bg-[#9E4320] flex items-center justify-center font-black text-white text-lg shadow-sm">🐓</div>
+          <div class="flex items-center gap-2">
+            <span class="text-base sm:text-lg font-black tracking-tight text-[#FFFDF9]">Le Coq <span class="text-[#FDE0B2]">se Loge</span></span>
+            <span class="hidden sm:inline-block text-xs text-[#FBE6D8] font-medium border-l border-[#D4734C] pl-2">Studios étudiants par ville</span>
+          </div>
+        </a>
+        <nav class="flex items-center gap-2">
+          <button type="button" onclick="openRadarModal()" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#9E4320] hover:bg-[#893819] text-[#FFFDF9] text-xs font-bold border border-[#D4734C] cursor-pointer">
+            <span>Radar Alertes</span>
+          </button>
+          <button type="button" onclick="openFavoritesModal()" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#9E4320] hover:bg-[#893819] text-[#FFFDF9] text-xs font-bold border border-[#D4734C] cursor-pointer">
+            <span>Favoris</span> (<span id="desktopFavBadge">0</span>)
+          </button>
+        </nav>
       </div>
     </div>
   </header>
 
-  <!-- FILTRES -->
-  <section class="bg-[#B8552E] text-[#FFFDF9] py-4 px-4 sm:px-6 lg:px-8">
-    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-      <div class="flex items-center gap-3">
-        <h1 class="text-xl sm:text-2xl font-black">Studios à</h1>
-        <select id="citySelect" onchange="handleCityChange(this.value)" class="bg-[#9E4320] text-[#FDE0B2] font-black text-xl rounded-xl px-3 py-1 border border-[#DC815B] cursor-pointer focus:outline-none">
-          <option value="Belfort">Belfort</option>
-          <option value="Rennes">Rennes</option>
-          <option value="Lyon">Lyon</option>
-        </select>
+  <!-- HERO & FILTRES -->
+  <section class="bg-[#B8552E] text-[#FFFDF9] pt-4 pb-6 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto space-y-3.5">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div class="flex flex-wrap items-baseline gap-3">
+          <h1 class="text-xl sm:text-2xl font-black flex items-center gap-2">
+            <span>Studios étudiants à</span>
+            <select id="citySelect" onchange="handleCityChange(this.value)" class="bg-[#9E4320] text-[#FDE0B2] font-black text-lg sm:text-xl rounded-xl px-3 py-1 border border-[#DC815B] cursor-pointer focus:outline-none">
+              <option value="Belfort">Belfort</option>
+              <option value="Rennes">Rennes</option>
+              <option value="Lyon">Lyon</option>
+            </select>
+          </h1>
+          <span class="text-xs text-[#FBE6D8]">Particuliers, résidences & CROUS</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold uppercase text-[#FBE6D8]">APL :</span>
+          <div class="inline-flex rounded-xl bg-[#963E1C] p-1 border border-[#DC815B]">
+            <button type="button" onclick="selectAplOption(false, 0)" id="aplNo" class="px-2.5 py-1 rounded-lg text-xs font-bold text-[#FBE6D8]">Sans APL</button>
+            <button type="button" onclick="selectAplOption(true, 135)" id="aplYes" class="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-[#F4BE6E] text-[#2B211B]">Non-boursier (-135€)</button>
+          </div>
+        </div>
       </div>
-      <div class="bg-white text-[#2B211B] p-3 rounded-2xl flex items-center gap-4 shadow-sm">
-        <span class="text-xs font-extrabold uppercase">Budget max :</span>
-        <input id="budgetSlider" type="range" min="250" max="850" step="10" value="600" oninput="handleBudgetChange(this.value)" class="cursor-pointer" />
-        <span id="budgetDisplay" class="text-xs font-black text-[#A84823]">600 € / mois</span>
+
+      <div class="bg-white text-[#2B211B] rounded-2xl p-4 shadow-md border border-[#EBDED1] space-y-3">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+          <div class="md:col-span-5">
+            <label for="schoolSelect" class="block text-xs font-extrabold uppercase text-[#7A665B] mb-1">Mon école</label>
+            <select id="schoolSelect" onchange="applyFilters()" class="w-full rounded-xl border border-[#E3D3C3] bg-white px-3 py-2 text-sm font-bold cursor-pointer"></select>
+          </div>
+          <div class="md:col-span-3">
+            <label for="sourceSelect" class="block text-xs font-extrabold uppercase text-[#7A665B] mb-1">Type de bailleur</label>
+            <select id="sourceSelect" onchange="applyFilters()" class="w-full rounded-xl border border-[#E3D3C3] bg-white px-3 py-2 text-sm font-bold cursor-pointer">
+              <option value="ALL">Tous les bailleurs</option>
+              <option value="Particulier">Particulier</option>
+              <option value="Résidence privée">Résidence privée</option>
+              <option value="CROUS">CROUS</option>
+            </select>
+          </div>
+          <div class="md:col-span-4">
+            <div class="flex justify-between mb-1">
+              <label for="budgetSlider" class="text-xs font-extrabold uppercase text-[#7A665B]">Budget max (APL déduite)</label>
+              <span id="budgetDisplay" class="text-xs font-black text-[#A84823]">600 € / mois</span>
+            </div>
+            <input id="budgetSlider" type="range" min="250" max="850" step="10" value="600" oninput="handleBudgetChange(this.value)" class="w-full cursor-pointer" />
+          </div>
+        </div>
+        <div class="pt-2 border-t border-[#F0E6DC] flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5" id="transportPillsContainer"></div>
+          <div class="flex items-center gap-1.5" id="timeRangePillsContainer"></div>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- CONTENU PRINCIPAL -->
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-base sm:text-lg font-black text-[#2B211B]">
+        <span id="resultsCount" class="text-[#C9643B]">0</span> studios à <span id="resultsCityText">Belfort</span>
+      </h2>
+      <select id="sortSelect" onchange="applyFilters()" class="rounded-xl border border-[#E3D3C3] bg-white px-3 py-2 text-xs font-bold cursor-pointer">
+        <option value="proximity">Tri : Proximité</option>
+        <option value="budget">Tri : Prix croissant</option>
+      </select>
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      <!-- Liste des offres -->
       <div class="lg:col-span-6 space-y-4">
-        <h2 class="text-lg font-black text-[#2B211B]"><span id="resultsCount">0</span> offres disponibles</h2>
         <div id="studiosGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
       </div>
-      <!-- Carte interactive Leaflet -->
-      <div class="lg:col-span-6 lg:sticky lg:top-20">
+      <div class="lg:col-span-6 lg:sticky lg:top-20 space-y-4">
         <div class="bg-white rounded-3xl p-4 shadow-sm border border-[#EBDED1]">
           <h3 id="mapSchoolTitle" class="text-sm font-black text-[#2B211B] mb-2">Plan interactif des résidences</h3>
           <div id="leafletMap" class="rounded-2xl border border-[#E3D3C3]"></div>
         </div>
+        <div id="mapPreviewCard" class="bg-white rounded-3xl p-4 shadow-sm border border-[#EBDED1]"></div>
       </div>
     </div>
   </main>
 
+  <!-- MODALES -->
+  <div id="studioDetailModal" class="fixed inset-0 z-50 hidden bg-[#2B211B]/65 backdrop-blur-sm p-4 flex items-center justify-center">
+    <div id="studioDetailContent" class="w-full max-w-lg bg-white rounded-3xl shadow-2xl p-6 relative animate-pop"></div>
+  </div>
+
+  <div id="radarModal" class="fixed inset-0 z-50 hidden bg-[#2B211B]/65 backdrop-blur-sm p-4 flex items-center justify-center">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 relative animate-pop space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-black">Radar Alertes Studios</h3>
+        <button onclick="closeRadarModal()" class="p-2 bg-gray-100 rounded-xl font-bold">✕</button>
+      </div>
+      <p class="text-xs text-gray-600">Configure ton alerte pour recevoir les nouvelles opportunités en temps réel.</p>
+      <button onclick="closeRadarModal()" class="w-full py-2.5 bg-[#B8552E] text-white font-extrabold text-xs rounded-xl">Fermer</button>
+    </div>
+  </div>
+
+  <div id="favoritesModal" class="fixed inset-0 z-50 hidden bg-[#2B211B]/65 backdrop-blur-sm p-4 flex items-center justify-center">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 relative animate-pop space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-black">Mes favoris</h3>
+        <button onclick="closeFavoritesModal()" class="p-2 bg-gray-100 rounded-xl font-bold">✕</button>
+      </div>
+      <div id="favoritesListContainer" class="space-y-2 max-h-60 overflow-y-auto"></div>
+      <button onclick="closeFavoritesModal()" class="w-full py-2.5 bg-[#B8552E] text-white font-extrabold text-xs rounded-xl">Fermer</button>
+    </div>
+  </div>
+
   <script>
-    const CITIES_DATA = {
-      Belfort: { lat: 47.6405, lng: 6.8580, offers: [
-        { id: "b1", title: "Résidence CROUS — Campus Belfort", type: "CROUS", lat: 47.6423, lng: 6.8442, surface: 18, price: 320 },
-        { id: "b2", title: "Studio Particulier — Centre-ville", type: "Particulier", lat: 47.6402, lng: 6.8590, surface: 22, price: 410 },
-        { id: "b3", title: "Résidence Privée Techn'hom", type: "Résidence", lat: 47.6415, lng: 6.8510, surface: 20, price: 380 }
-      ]},
-      Rennes: { lat: 48.1147, lng: -1.6794, offers: [
-        { id: "r1", title: "Résidence CROUS — Beaulieu", type: "CROUS", lat: 48.1195, lng: -1.6365, surface: 18, price: 340 },
-        { id: "r2", title: "Studio Centre — République", type: "Particulier", lat: 48.1110, lng: -1.6780, surface: 23, price: 490 },
-        { id: "r3", title: "Résidence Privée Villejean", type: "Résidence", lat: 48.1180, lng: -1.7000, surface: 20, price: 450 }
-      ]},
-      Lyon: { lat: 45.7578, lng: 4.8320, offers: [
-        { id: "l1", title: "Résidence CROUS — La Doua", type: "CROUS", lat: 45.7824, lng: 4.8705, surface: 19, price: 360 },
-        { id: "l2", title: "Studio Particulier — Part-Dieu", type: "Particulier", lat: 45.7600, lng: 4.8580, surface: 21, price: 580 },
-        { id: "l3", title: "Résidence Privée Berges du Rhône", type: "Résidence", lat: 45.7508, lng: 4.8371, surface: 22, price: 610 }
-      ]}
+    const SCHOOLS_BY_CITY = {
+      Belfort: [
+        { id: "all-bel", name: "Centre Belfort (Toutes écoles)", lat: 47.6405, lng: 6.8580 },
+        { id: "esta", name: "ESTA Belfort", lat: 47.6403, lng: 6.8607 },
+        { id: "utbm-bel", name: "UTBM Belfort", lat: 47.6417, lng: 6.8450 },
+        { id: "iut-nfc", name: "IUT Nord Franche-Comté", lat: 47.6426, lng: 6.8393 }
+      ],
+      Rennes: [
+        { id: "all-ren", name: "Centre Rennes (Toutes écoles)", lat: 48.1147, lng: -1.6794 },
+        { id: "beaulieu", name: "Campus Beaulieu", lat: 48.1177, lng: -1.6385 },
+        { id: "insa-ren", name: "INSA Rennes", lat: 48.1214, lng: -1.6353 },
+        { id: "rennes2", name: "Université Rennes 2", lat: 48.1195, lng: -1.7013 }
+      ],
+      Lyon: [
+        { id: "all-lyo", name: "Centre Lyon (Toutes écoles)", lat: 45.7578, lng: 4.8320 },
+        { id: "insa-lyon", name: "INSA Lyon (La Doua)", lat: 45.7832, lng: 4.8726 },
+        { id: "emlyon", name: "emlyon business school", lat: 45.7347, lng: 4.8364 },
+        { id: "lyon2-berges", name: "Université Lyon 2", lat: 45.7508, lng: 4.8371 }
+      ]
     };
 
-    let state = { city: "Belfort", maxBudget: 700 };
+    const TRANSPORT_MODES = [
+      { id: "walk", label: "À pied", speedKmh: 4.8 },
+      { id: "bike", label: "Vélo", speedKmh: 15 },
+      { id: "bus", label: "Bus", speedKmh: 17 }
+    ];
+
+    const TIME_RANGES = [
+      { id: "lt20", label: "< 20 min", check: m => m <= 20 },
+      { id: "gt20", label: "> 20 min", check: m => m > 20 }
+    ];
+
+    function buildStudios() {
+      const res = [];
+      const cfg = { Belfort: 30, Rennes: 60, Lyon: 90 };
+      Object.entries(cfg).forEach(([city, count]) => {
+        const zones = SCHOOLS_BY_CITY[city];
+        for (let i = 0; i < count; i++) {
+          const z = zones[i % zones.length];
+          res.push({
+            id: `${city.toLowerCase().slice(0,3)}-${i+1}`,
+            city,
+            sourceType: i % 3 === 0 ? "Particulier" : i % 3 === 1 ? "Résidence privée" : "CROUS",
+            title: `Studio Étudiant — ${z.name.split(' ')[0]} #${i+1}`,
+            neighborhood: z.name,
+            lat: +(z.lat + (Math.random() - 0.5) * 0.012).toFixed(5),
+            lng: +(z.lng + (Math.random() - 0.5) * 0.012).toFixed(5),
+            photoUrl: "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80",
+            surface: 18 + (i % 8),
+            rentBase: 310 + ((i * 19) % 280),
+            charges: 40,
+            energyEst: 20
+          });
+        }
+      });
+      return res;
+    }
+
+    const STUDIOS_DB = buildStudios();
+
+    const state = {
+      city: "Belfort",
+      schoolId: "all-bel",
+      sourceFilter: "ALL",
+      maxBudget: 600,
+      includeApl: true,
+      aplAmount: 135,
+      selectedTransports: ["walk", "bike", "bus"],
+      selectedTimeRanges: ["lt20", "gt20"],
+      selectedStudioId: "bel-1",
+      favorites: []
+    };
+
     let mapInstance = null;
     let markersLayer = null;
 
     function initApp() {
+      populateSchools(state.city);
+      renderPills();
       applyFilters();
       setTimeout(initMap, 150);
     }
 
+    function populateSchools(city) {
+      const sel = document.getElementById("schoolSelect");
+      const schools = SCHOOLS_BY_CITY[city] || [];
+      sel.innerHTML = schools.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
+      state.schoolId = schools[0].id;
+    }
+
+    function renderPills() {
+      document.getElementById("transportPillsContainer").innerHTML = TRANSPORT_MODES.map(m => `
+        <button type="button" onclick="toggleTransport('${m.id}')" class="px-2.5 py-1 rounded-lg text-xs font-bold border bg-white text-[#74625A]">${m.label}</button>
+      `).join("");
+      document.getElementById("timeRangePillsContainer").innerHTML = TIME_RANGES.map(r => `
+        <button type="button" onclick="toggleTimeRange('${r.id}')" class="px-2.5 py-1 rounded-lg text-xs font-bold border bg-white text-[#74625A]">${r.label}</button>
+      `).join("");
+    }
+
+    function toggleTransport(id) {
+      const idx = state.selectedTransports.indexOf(id);
+      if (idx > -1 && state.selectedTransports.length > 1) state.selectedTransports.splice(idx, 1);
+      else if (idx === -1) state.selectedTransports.push(id);
+      applyFilters();
+    }
+
+    function toggleTimeRange(id) {
+      const idx = state.selectedTimeRanges.indexOf(id);
+      if (idx > -1 && state.selectedTimeRanges.length > 1) state.selectedTimeRanges.splice(idx, 1);
+      else if (idx === -1) state.selectedTimeRanges.push(id);
+      applyFilters();
+    }
+
     function initMap() {
       if (mapInstance) return;
-      const cityData = CITIES_DATA[state.city];
-      mapInstance = L.map("leafletMap", { zoomControl: true }).setView([cityData.lat, cityData.lng], 14);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      const school = getSelectedSchool();
+      mapInstance = L.map("leafletMap", { zoomControl: true }).setView([school.lat, school.lng], 14);
+      
+      // Utilisation directe d'OpenStreetMap (100% gratuit, sans clé API requise)
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
-        attribution: '&copy; OpenStreetMap &copy; CARTO'
+        attribution: '&copy; OpenStreetMap contributors'
       }).addTo(mapInstance);
+
       markersLayer = L.layerGroup().addTo(mapInstance);
       updateMapMarkers();
     }
 
+    function getSelectedSchool() {
+      const schools = SCHOOLS_BY_CITY[state.city] || [];
+      return schools.find(s => s.id === state.schoolId) || schools[0];
+    }
+
+    function computeDistKm(lat1, lon1, lat2, lon2) {
+      return Math.sqrt((lat2 - lat1)**2 + (lon2 - lon1)**2) * 111;
+    }
+
+    function getBestMinutes(studio) {
+      const school = getSelectedSchool();
+      const dist = computeDistKm(studio.lat, studio.lng, school.lat, school.lng);
+      const minutes = Math.max(3, Math.round((dist / 15) * 60));
+      return minutes;
+    }
+
+    function getMonthlyPrice(studio) {
+      const total = studio.rentBase + studio.charges + studio.energyEst;
+      return Math.max(0, Math.round(total - (state.includeApl ? state.aplAmount : 0)));
+    }
+
     function handleCityChange(city) {
       state.city = city;
-      const cityData = CITIES_DATA[city];
+      document.getElementById("resultsCityText").textContent = city;
+      populateSchools(city);
+      const school = getSelectedSchool();
       if (mapInstance) {
-        mapInstance.setView([cityData.lat, cityData.lng], 14);
+        mapInstance.setView([school.lat, school.lng], 14);
         setTimeout(() => mapInstance.invalidateSize(), 100);
       }
       applyFilters();
@@ -125,45 +344,116 @@
       applyFilters();
     }
 
+    function selectAplOption(include, amount) {
+      state.includeApl = include;
+      state.aplAmount = amount;
+      applyFilters();
+    }
+
     function applyFilters() {
-      const cityData = CITIES_DATA[state.city];
-      const filtered = cityData.offers.filter(o => o.price <= state.maxBudget);
+      const schoolSelect = document.getElementById("schoolSelect");
+      if (schoolSelect) state.schoolId = schoolSelect.value;
+      const sourceSelect = document.getElementById("sourceSelect");
+      if (sourceSelect) state.sourceFilter = sourceSelect.value;
+
+      const filtered = STUDIOS_DB.filter(s => {
+        if (s.city !== state.city) return false;
+        if (state.sourceFilter !== "ALL" && s.sourceType !== state.sourceFilter) return false;
+        if (getMonthlyPrice(s) > state.maxBudget) return false;
+        return true;
+      });
+
       document.getElementById("resultsCount").textContent = filtered.length;
 
       const grid = document.getElementById("studiosGrid");
-      grid.innerHTML = filtered.map(o => `
-        <div class="bg-white p-4 rounded-2xl border border-[#EBDED1] shadow-sm flex flex-col justify-between gap-3">
-          <div>
-            <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-[#FDF1EA] text-[#B8552E]">${o.type}</span>
-            <h4 class="font-black text-sm mt-1.5">${o.title}</h4>
-            <p class="text-xs text-gray-500 mt-0.5">${o.surface} m²</p>
+      grid.innerHTML = filtered.slice(0, 20).map(s => {
+        const mins = getBestMinutes(s);
+        const price = getMonthlyPrice(s);
+        const isFav = state.favorites.includes(s.id);
+        return `
+          <div class="bg-white rounded-3xl border border-[#EBDED1] overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col">
+            <div class="relative h-32 bg-[#9E4320]">
+              <img src="${s.photoUrl}" class="w-full h-full object-cover" />
+              <span class="absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs font-bold bg-[#9E4320] text-white">${s.sourceType}</span>
+            </div>
+            <div class="p-3.5 flex-1 flex flex-col justify-between gap-2">
+              <div>
+                <h4 class="font-black text-sm text-[#2B211B]">${s.title}</h4>
+                <div class="flex items-center gap-2 mt-1 text-xs font-bold text-[#7A665B]">
+                  <span>~${mins} min de l'école</span> • <span>${s.surface} m²</span>
+                </div>
+              </div>
+              <div class="pt-2 border-t border-[#F0E6DC] flex items-center justify-between">
+                <span class="font-black text-base text-[#2B211B]">${price} € <span class="text-xs font-bold text-[#7A665B]">/mois</span></span>
+                <button onclick="openStudioDetail('${s.id}')" class="px-3 py-1.5 bg-[#B8552E] text-white text-xs font-extrabold rounded-xl cursor-pointer">Détails</button>
+              </div>
+            </div>
           </div>
-          <div class="flex items-center justify-between pt-2 border-t border-gray-100">
-            <span class="font-black text-base text-[#B8552E]">${o.price} € <span class="text-xs text-gray-500 font-normal">/mois</span></span>
-            <button onclick="focusOnOffer(${o.lat}, ${o.lng})" class="px-3 py-1.5 bg-[#B8552E] text-white text-xs font-bold rounded-xl cursor-pointer">Voir sur la carte</button>
-          </div>
-        </div>
-      `).join("");
+        `;
+      }).join("");
 
       if (markersLayer) updateMapMarkers(filtered);
     }
 
-    function updateMapMarkers(offers = CITIES_DATA[state.city].offers.filter(o => o.price <= state.maxBudget)) {
+    function updateMapMarkers(studios = STUDIOS_DB.filter(s => s.city === state.city)) {
       markersLayer.clearLayers();
-      offers.forEach(o => {
-        const marker = L.marker([o.lat, o.lng], {
-          icon: L.divIcon({ className: "", html: `<div class="coq-price-pin">${o.price} €</div>`, iconSize: [58, 24], iconAnchor: [29, 12] })
+      studios.slice(0, 50).forEach(s => {
+        const price = getMonthlyPrice(s);
+        const marker = L.marker([s.lat, s.lng], {
+          icon: L.divIcon({ className: "", html: `<div class="coq-price-pin">${price} €</div>`, iconSize: [58, 24], iconAnchor: [29, 12] })
         }).addTo(markersLayer);
+        marker.on("click", () => {
+          state.selectedStudioId = s.id;
+          renderMapPreview(s);
+        });
       });
       setTimeout(() => mapInstance.invalidateSize(), 50);
     }
 
-    function focusOnOffer(lat, lng) {
-      if (mapInstance) {
-        mapInstance.setView([lat, lng], 16);
-        setTimeout(() => mapInstance.invalidateSize(), 50);
-      }
+    function renderMapPreview(studio) {
+      const container = document.getElementById("mapPreviewCard");
+      const price = getMonthlyPrice(studio);
+      const mins = getBestMinutes(studio);
+      container.innerHTML = `
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h4 class="font-black text-sm">${studio.title}</h4>
+            <p class="text-xs text-gray-500">~${mins} min • ${price} €/mois</p>
+          </div>
+          <button onclick="openStudioDetail('${studio.id}')" class="px-3 py-1.5 bg-[#B8552E] text-white text-xs font-extrabold rounded-xl">Fiche</button>
+        </div>
+      `;
     }
+
+    function openStudioDetail(id) {
+      const s = STUDIOS_DB.find(item => item.id === id);
+      if (!s) return;
+      const modal = document.getElementById("studioDetailModal");
+      const content = document.getElementById("studioDetailContent");
+      const price = getMonthlyPrice(s);
+      content.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <h3 class="text-lg font-black">${s.title}</h3>
+            <button onclick="closeStudioDetail()" class="p-2 bg-gray-100 rounded-xl font-bold">✕</button>
+          </div>
+          <div class="h-40 rounded-2xl overflow-hidden"><img src="${s.photoUrl}" class="w-full h-full object-cover" /></div>
+          <div class="flex justify-between items-center text-sm font-bold">
+            <span>Surface : ${s.surface} m²</span>
+            <span class="text-lg text-[#C9643B] font-black">${price} € / mois</span>
+          </div>
+          <button onclick="closeStudioDetail()" class="w-full py-2.5 bg-[#B8552E] text-white font-extrabold rounded-xl cursor-pointer">Fermer</button>
+        </div>
+      `;
+      modal.classList.remove("hidden");
+    }
+
+    function closeStudioDetail() { document.getElementById("studioDetailModal").classList.add("hidden"); }
+    function openRadarModal() { document.getElementById("radarModal").classList.remove("hidden"); }
+    function closeRadarModal() { document.getElementById("radarModal").classList.add("hidden"); }
+    function openFavoritesModal() { document.getElementById("favoritesModal").classList.remove("hidden"); }
+    function closeFavoritesModal() { document.getElementById("favoritesModal").classList.add("hidden"); }
+    function resetAllFilters() { applyFilters(); }
 
     document.addEventListener("DOMContentLoaded", initApp);
   </script>
